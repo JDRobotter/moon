@@ -1,11 +1,9 @@
 from astropy.time import Time
+import time
 from astropy.coordinates import (
     solar_system_ephemeris,
-    EarthLocation,
-    SphericalRepresentation,
-    Angle,
 )
-from astropy.coordinates import get_body_barycentric, get_body
+from astropy.coordinates import get_body_barycentric
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -52,10 +50,83 @@ def normalize_0_2pi(a):
 
 def main():
     # genangles()
-    gendates()
+    # gen_dates()
+    gen_ephemerid()
 
 
-def genangles():
+def get_shadow_angle(t):
+    with solar_system_ephemeris.set("builtin"):
+        # -- fetch every body position at provided time from ephemerids
+        moon = get_body_barycentric("moon", t)
+        sun = get_body_barycentric("sun", t)
+        earth = get_body_barycentric("earth", t)
+
+        # -- compute sun-moon-earth angle
+        # get vectors to sun and earth from moon
+        v1 = (moon - sun).get_xyz().value
+        v2 = (earth - moon).get_xyz().value
+        # normalize vectors
+        v1n = v1 / np.linalg.norm(v1)
+        v2n = v2 / np.linalg.norm(v2)
+        # a dot product between the 2 normalized vectors gives us
+        # the absolute cosine of angle
+        dp = np.dot(v1n, v2n)
+        alpha = np.acos(dp)
+        # yet angle sign is unknown and can be deduced by checking
+        # if the cross product between our two vector is aligned
+        # with (arbitrary) up vector or not
+        cp = np.cross(v1n, v2n)
+        up = np.array([0, 0, 1])
+        if np.dot(up, cp) < 0:
+            alpha = -alpha
+
+        # reference is the right side of moon shadow
+        alpha = -alpha
+
+        # normalize angle
+        alpha = normalize_0_2pi(alpha)
+
+    return alpha
+
+
+def gen_ephemerid():
+
+    # epherids will start at curent unix timestamp
+    now = int(time.time())
+
+    N = 10 * 365 * 24
+    T = 3600
+    print("struct MoonAngles {")
+    print("    // starting unix timestamp")
+    print("    start: u64,")
+    print("    // time between each entry in seconds")
+    print("    period: u32,")
+    print("    // moon angles in decidegrees")
+    print(
+        f"    angles: [u16;{N}]",
+    )
+    print("}")
+    print("")
+    print("const MOON_ANGLES: MoonAngles = MoonAngles {")
+    print(f"    start: {now},")
+    print(f"    period: {T},")
+    print("    angles: [")
+
+    # compute moon angle each hour for 10 years
+    for h in range(0, N):
+
+        t = Time(now + h * T, format="unix")
+        alpha = get_shadow_angle(t)
+        # convert angle to decidegrees
+        alpha = int(10 * np.degrees(alpha))
+
+        print(f"{alpha}")
+
+    print("    ]")
+    print("};")
+
+
+def gen_angles():
     # -- TEST draw all angles --
     W, H = (500, 1000)
     with Image.new("RGB", (W, H)) as im:
@@ -74,57 +145,30 @@ def genangles():
     im.save("moon.png")
 
 
-def gendates():
-    loc = EarthLocation.of_site("greenwich")
+def gen_dates():
 
-    with solar_system_ephemeris.set("builtin"):
-        W, H = 500, 1000
-        with Image.new("RGB", (W, H)) as im:
-            ix = 0
-            iy = 0
-            for hour in range(1, 23):
-                t = Time(f"2025-11-8 {hour}:00")
-                # -- fetch every body position at provided time from ephemerids
-                moon = get_body_barycentric("moon", t)
-                sun = get_body_barycentric("sun", t)
-                earth = get_body_barycentric("earth", t)
+    W, H = 500, 1000
+    with Image.new("RGB", (W, H)) as im:
+        ix = 0
+        iy = 0
+        now = time.time()
+        for day in range(0, 30):
 
-                # -- compute sun-moon-earth angle
-                # get vectors to sun and earth from moon
-                v1 = (moon - sun).get_xyz().value
-                v2 = (earth - moon).get_xyz().value
-                # normalize vectors
-                v1n = v1 / np.linalg.norm(v1)
-                v2n = v2 / np.linalg.norm(v2)
-                # a dot product between the 2 normalized vectors gives us
-                # the absolute cosine of angle
-                dp = np.dot(v1n, v2n)
-                alpha = np.acos(dp)
-                # yet angle sign is unknown and can be deduced by checking
-                # if the cross product between our two vector is aligned
-                # with (arbitrary) up vector or not
-                cp = np.cross(v1n, v2n)
-                up = np.array([0, 0, 1])
-                if np.dot(up, cp) < 0:
-                    alpha = -alpha
+            t = Time(now + day * 24 * 3600, format="unix")
 
-                # reference is the right side of moon shadow
-                alpha = -alpha
+            alpha = get_shadow_angle(t)
 
-                # normalize angle
-                alpha = normalize_0_2pi(alpha)
+            alpha_degrees = np.degrees(alpha)
+            print(alpha_degrees)
+            date = str(t.strftime("%Y-%m-%d"))
+            draw_moon(im, (ix, iy), alpha_degrees, date)
 
-                alpha_degrees = np.degrees(alpha)
-                print(alpha_degrees)
-                date = str(t.strftime("%Y-%m-%d"))
-                draw_moon(im, (ix, iy), alpha_degrees, date)
+            ix += 105
+            if (ix + 100) > W:
+                ix = 0
+                iy += 105
 
-                ix += 105
-                if (ix + 100) > W:
-                    ix = 0
-                    iy += 105
-
-        im.save("moon.png")
+    im.save("moon.png")
 
 
 if __name__ == "__main__":
