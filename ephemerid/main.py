@@ -1,0 +1,131 @@
+from astropy.time import Time
+from astropy.coordinates import (
+    solar_system_ephemeris,
+    EarthLocation,
+    SphericalRepresentation,
+    Angle,
+)
+from astropy.coordinates import get_body_barycentric, get_body
+import numpy as np
+from PIL import Image, ImageDraw
+
+
+def draw_moon(im, p, angle_degrees, date):
+    draw = ImageDraw.Draw(im)
+    px, py = p
+
+    B = "yellow"
+    A = "grey"
+
+    a = np.radians(angle_degrees)
+
+    if a > np.pi:
+        a = a - np.pi
+        B, A = A, B
+
+    if a < np.pi / 2:
+        dx = 50 * (1.0 - np.cos(a))
+        draw.circle((50 + px, 50 + py), 50, fill=A)
+        draw.chord(((dx + px, 0 + py), (100 - dx + px, 100 + py)), 90, -90, fill=B)
+        draw.chord(((px, py), (100 + px, 100 + py)), -90, +90, fill=B)
+    else:
+        a = np.pi - a
+        dx = 50 * (1.0 - np.cos(a))
+        draw.circle((50 + px, 50 + py), 50, fill=B)
+        draw.chord(((px, py), (100 + px, 100 + py)), 90, -90, fill=A)
+        draw.chord(((dx + px, 0 + py), (100 - dx + px, 100 + py)), -90, 90, fill=A)
+
+    angle_degrees = int(angle_degrees)
+    draw.text((px, py), f"{angle_degrees}", fill="red")
+    draw.text((px, py + 10), f"{date}", fill="red")
+
+
+def normalize_0_2pi(a):
+    while 1:
+        if a < 0:
+            a += 2 * np.pi
+        elif a > 2 * np.pi:
+            a -= 2 * np.pi
+        else:
+            return a
+
+
+def main():
+    # genangles()
+    gendates()
+
+
+def genangles():
+    # -- TEST draw all angles --
+    W, H = (500, 1000)
+    with Image.new("RGB", (W, H)) as im:
+        x = 0
+        y = 0
+        for angle in range(0, 360, 10):
+            try:
+                draw_moon(im, (x, y), angle, "")
+            except Exception as e:
+                print(e)
+
+            x += 105
+            if (x + 100) > W:
+                x = 0
+                y += 105
+    im.save("moon.png")
+
+
+def gendates():
+    loc = EarthLocation.of_site("greenwich")
+
+    with solar_system_ephemeris.set("builtin"):
+        W, H = 500, 1000
+        with Image.new("RGB", (W, H)) as im:
+            ix = 0
+            iy = 0
+            for hour in range(1, 23):
+                t = Time(f"2025-11-8 {hour}:00")
+                # -- fetch every body position at provided time from ephemerids
+                moon = get_body_barycentric("moon", t)
+                sun = get_body_barycentric("sun", t)
+                earth = get_body_barycentric("earth", t)
+
+                # -- compute sun-moon-earth angle
+                # get vectors to sun and earth from moon
+                v1 = (moon - sun).get_xyz().value
+                v2 = (earth - moon).get_xyz().value
+                # normalize vectors
+                v1n = v1 / np.linalg.norm(v1)
+                v2n = v2 / np.linalg.norm(v2)
+                # a dot product between the 2 normalized vectors gives us
+                # the absolute cosine of angle
+                dp = np.dot(v1n, v2n)
+                alpha = np.acos(dp)
+                # yet angle sign is unknown and can be deduced by checking
+                # if the cross product between our two vector is aligned
+                # with (arbitrary) up vector or not
+                cp = np.cross(v1n, v2n)
+                up = np.array([0, 0, 1])
+                if np.dot(up, cp) < 0:
+                    alpha = -alpha
+
+                # reference is the right side of moon shadow
+                alpha = -alpha
+
+                # normalize angle
+                alpha = normalize_0_2pi(alpha)
+
+                alpha_degrees = np.degrees(alpha)
+                print(alpha_degrees)
+                date = str(t.strftime("%Y-%m-%d"))
+                draw_moon(im, (ix, iy), alpha_degrees, date)
+
+                ix += 105
+                if (ix + 100) > W:
+                    ix = 0
+                    iy += 105
+
+        im.save("moon.png")
+
+
+if __name__ == "__main__":
+    main()
