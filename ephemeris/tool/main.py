@@ -51,7 +51,7 @@ def normalize_0_2pi(a):
 def main():
     # genangles()
     # gen_dates()
-    gen_ephemerid()
+    gen_ephemeris()
 
 
 def get_shadow_angle(t):
@@ -89,25 +89,25 @@ def get_shadow_angle(t):
     return alpha
 
 
-def gen_ephemerid():
+def gen_ephemeris():
 
     # epherids will start at curent unix timestamp
     now = int(time.time())
 
     N = 10 * 365 * 24
     T = 3600
-    print("struct MoonAngles {")
+    print("struct MoonEphemeris {")
     print("    // starting unix timestamp")
-    print("    start: u64,")
+    print("    pub start: u64,")
     print("    // time between each entry in seconds")
-    print("    period: u32,")
+    print("    pub period: u32,")
     print("    // moon angles in decidegrees")
     print(
-        f"    angles: [u16;{N}]",
+        f"        pub angles: [u16;{N}]",
     )
     print("}")
     print("")
-    print("const MOON_ANGLES: MoonAngles = MoonAngles {")
+    print("const MOON_ANGLES: MoonEphemeris = MoonEphemeris {")
     print(f"    start: {now},")
     print(f"    period: {T},")
     print("    angles: [")

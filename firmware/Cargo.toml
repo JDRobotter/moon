@@ -26,10 +26,12 @@ experimental = ["esp-idf-svc/experimental"]
 log = "0.4"
 esp-idf-svc = { version = "0.51", features = ["critical-section"] }
 embedded-svc = "0.28"
-
 chrono = "0.4.42"
+embedded-stepper = "0.1.2"
 
 git-version = "0.3.9"
+
+ephemeris = { path = "../ephemeris/" }
 
 [build-dependencies]
 embuild = "0.33"

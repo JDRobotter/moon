@@ -446,6 +446,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-stepper"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d80b28ade7e17ec6e17eeca76959b0c4079add2f221732513ede6a9def20eb75"
+dependencies = [
+ "embedded-hal 1.0.0",
+]
+
+[[package]]
 name = "embedded-svc"
 version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -518,6 +527,10 @@ checksum = "3f47e0157f2cb54f5ae1bd371b30a2ae4311e1c028f575cd4e81de7353215965"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "ephemeris"
+version = "0.1.0"
 
 [[package]]
 name = "equivalent"
@@ -925,8 +938,10 @@ name = "moon"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "embedded-stepper",
  "embedded-svc",
  "embuild",
+ "ephemeris",
  "esp-idf-svc",
  "git-version",
  "log",
