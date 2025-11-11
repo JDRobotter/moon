@@ -1,9 +1,7 @@
 from astropy.time import Time
 import time
-from astropy.coordinates import (
-    solar_system_ephemeris,
-)
-from astropy.coordinates import get_body_barycentric
+from astropy.coordinates import solar_system_ephemeris, EarthLocation, AltAz
+from astropy.coordinates import get_body, get_body_barycentric
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -54,7 +52,25 @@ def main():
     gen_ephemeris()
 
 
-def get_shadow_angle(t):
+def get_elevation(t) -> float:
+    """Return moon elevation at given time t in degrees"""
+    with solar_system_ephemeris.set("builtin"):
+
+        # get moon position
+        loc = EarthLocation.from_geodetic(-0.55, 44.85)
+        moon = get_body("moon", t, loc)
+
+        # convert moon position to an elevation / azimuth frame
+        altazframe = AltAz(obstime=t, location=loc, pressure=0)
+        moonaz = moon.transform_to(altazframe)
+
+        # elevation is in degrees
+        elevation = moonaz.alt.degree
+
+        return elevation
+
+
+def get_shadow_angle(t) -> int:
     with solar_system_ephemeris.set("builtin"):
         # -- fetch every body position at provided time from ephemerids
         moon = get_body_barycentric("moon", t)
@@ -94,35 +110,44 @@ def gen_ephemeris():
     # epherids will start at curent unix timestamp
     now = int(time.time())
 
-    N = 10 * 365 * 24
+    # N = 10 * 365 * 24  # 10 years
+    N = 24  # 1 day
     T = 3600
-    print("struct MoonEphemeris {")
-    print("    // starting unix timestamp")
-    print("    pub start: u64,")
-    print("    // time between each entry in seconds")
-    print("    pub period: u32,")
-    print("    // moon angles in decidegrees")
-    print(
-        f"        pub angles: [u16;{N}]",
-    )
-    print("}")
-    print("")
-    print("const MOON_ANGLES: MoonEphemeris = MoonEphemeris {")
+
+    print("use crate::defs::MoonEphemeris;")
+    print("pub const MOON_EPHEMERIS: MoonEphemeris = MoonEphemeris {")
     print(f"    start: {now},")
     print(f"    period: {T},")
-    print("    angles: [")
 
-    # compute moon angle each hour for 10 years
+    # compute moon angles each hour for 10 years
+    angles = []
     for h in range(0, N):
 
         t = Time(now + h * T, format="unix")
+        # -- shadow angle
         alpha = get_shadow_angle(t)
         # convert angle to decidegrees
         alpha = int(10 * np.degrees(alpha))
 
-        print(f"{alpha}")
+        # -- moon elevation
+        elevation = get_elevation(t)
+        # elevation will be stored as a i8 in degrees
+        # elevation is ranging from -90 to +90 so representation should fit
+        elevation = int(elevation)
 
-    print("    ]")
+        angles.append((alpha, elevation))
+
+    # output values
+    print("    shadow: &[")
+    for a, _ in angles:
+        print(f"        {a},")
+    print("    ],")
+
+    print("    elevation: &[")
+    for _, e in angles:
+        print(f"        {e},")
+    print("    ],")
+
     print("};")
 
 
